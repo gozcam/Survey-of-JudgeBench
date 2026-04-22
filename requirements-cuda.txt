@@ -10,4 +10,5 @@ requests
 jinja2
 transformers
 torch
+flash-attn
 sentencepiece
