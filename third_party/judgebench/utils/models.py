@@ -87,7 +87,7 @@ class AnthropicAPI(ChatAPI):
 
 class GeminiAPI(OpenAIAPI):
     """Google Gemini API.
-    
+
     Models include gemini-1.5-pro-001 etc.
     """
     def __init__(self, model: str):
@@ -108,6 +108,31 @@ class GeminiAPI(OpenAIAPI):
             base_url=f"https://us-central1-aiplatform.googleapis.com/v1beta1/projects/{project_id}/locations/us-central1/endpoints/openapi",
             api_key=creds.token,
         )
+
+
+class GeminiAPIKey(OpenAIAPI):
+    """Google Gemini API using a GEMINI_API_KEY via the OpenAI-compatible endpoint.
+
+    See https://ai.google.dev/gemini-api/docs/openai
+    """
+    def __init__(self, model: str):
+        self.model = model
+        self.client = openai.AsyncClient(
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            api_key=os.environ.get("GEMINI_API_KEY"),
+        )
+
+    @backoff.on_exception(backoff.fibo, (openai.OpenAIError), max_tries=10, max_value=30)
+    async def chat(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        response = await self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            **kwargs,
+        )
+        message = response.choices[0].message
+        if message is None:
+            raise openai.OpenAIError("No response from Google Gemini")
+        return message.content
 
     @backoff.on_exception(backoff.fibo, (openai.OpenAIError), max_tries=10, max_value=30)
     async def chat(self, messages: List[Dict[str, str]], **kwargs) -> str:
@@ -173,6 +198,8 @@ def get_chat_api_from_model(model: str) -> ChatAPI:
     if model.startswith("claude"):
         return AnthropicAPI(model)
     if model.startswith("gemini"):
+        if os.environ.get("GEMINI_API_KEY"):
+            return GeminiAPIKey(model)
         return GeminiAPI(model)
     if model == "meta-llama/Meta-Llama-3.1-405B-Instruct":
         return TogetherAPI(model + "-turbo")
