@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Run JudgeBench on a 10-pair subset of the GPT-4o dataset using Gemini Flash Lite.
 
 Reads the user's Gemini API key from the ``GEMINI_API_KEY`` environment variable,
@@ -10,6 +9,7 @@ Usage:
     export GEMINI_API_KEY=...
     python scripts/rungeminiflashlite_pilot.py
 """
+
 from __future__ import annotations
 
 import json
@@ -30,7 +30,6 @@ JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "gemini-2.5-flash-lite")
 NUM_PAIRS = 10
 SEED = 42
 CONCURRENCY_LIMIT = os.environ.get("CONCURRENCY_LIMIT", "5")
-
 
 def build_subset() -> None:
     if SUBSET_DATASET.exists():
@@ -53,15 +52,11 @@ def build_subset() -> None:
 
     print(f"[pilot] Wrote {len(subset)} pairs to {SUBSET_DATASET}")
 
-
 def run_judgebench() -> None:
     if not os.environ.get("GEMINI_API_KEY"):
-        sys.exit(
-            "[pilot] GEMINI_API_KEY is not set. Export it before running, e.g.:\n"
-            "    export GEMINI_API_KEY=your-key"
-        )
+        sys.exit("[pilot] GEMINI_API_KEY is not set.")
 
-    pairs_arg = str(Path("data") / SUBSET_DATASET.name)
+    pairs_arg = f"data/{SUBSET_DATASET.name}"
     cmd = [
         sys.executable,
         "run_judge.py",
@@ -73,7 +68,6 @@ def run_judgebench() -> None:
 
     print(f"[pilot] Running: {' '.join(cmd)} (cwd={JUDGEBENCH_DIR})")
     subprocess.run(cmd, cwd=JUDGEBENCH_DIR, check=True)
-
 
 if __name__ == "__main__":
     build_subset()

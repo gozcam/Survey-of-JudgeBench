@@ -49,7 +49,7 @@ async def judge_pairs(pairs: List[Dict[str, Any]], judge_name: str, judge_model:
         pair = await future
         if output_file is not None:
             async with file_lock:
-                with open(output_file, 'a') as f:
+                with open(output_file, 'a', encoding='utf-8') as f:
                     f.write(json.dumps(pair, ensure_ascii=False) + '\n')
 
     return pairs

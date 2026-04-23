@@ -7,6 +7,7 @@ The script:
      exported as `OPENAI_API_KEY` in the environment.
 """
 
+
 import json
 import os
 import random
@@ -14,14 +15,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
 JUDGEBENCH_DIR = REPO_ROOT / "third_party" / "judgebench"
+RUN_JUDGE_SCRIPT = JUDGEBENCH_DIR / "run_judge.py"
 FULL_DATASET = JUDGEBENCH_DIR / "data" / "dataset=judgebench,response_model=gpt-4o-2024-05-13.jsonl"
 SUBSET_PATH = JUDGEBENCH_DIR / "data" / "dataset=judgebench-pilot10,response_model=gpt-4o-2024-05-13.jsonl"
 SUBSET_SIZE = 10
 SEED = 42
-
 
 def ensure_subset() -> Path:
     if SUBSET_PATH.exists():
@@ -47,28 +47,29 @@ def ensure_subset() -> Path:
     print(f"Wrote {SUBSET_SIZE}-pair subset to {SUBSET_PATH}.")
     return SUBSET_PATH
 
-
 def run_judgebench(subset_path: Path) -> int:
     if not os.environ.get("OPENAI_API_KEY"):
-        print("ERROR: OPENAI_API_KEY is not set. Export it before running this script.", file=sys.stderr)
+        print("ERROR: OPENAI_API_KEY is not set.", file=sys.stderr)
         return 1
+
+    output_dir = REPO_ROOT / "outputs"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     cmd = [
         sys.executable,
-        "run_judge.py",
+        str(RUN_JUDGE_SCRIPT),
         "--judge_name", "arena_hard",
         "--judge_model", "gpt-4o-mini",
-        "--pairs", str(subset_path.relative_to(JUDGEBENCH_DIR)),
+        "--pairs", str(subset_path),
         "--concurrency_limit", "5",
     ]
-    print(f"Running: {' '.join(cmd)} (cwd={JUDGEBENCH_DIR})")
-    return subprocess.run(cmd, cwd=JUDGEBENCH_DIR).returncode
-
+    print(f"Running: {' '.join(cmd)} (cwd={REPO_ROOT})")
+    print(f"Outputs will be written to: {output_dir}")
+    return subprocess.run(cmd, cwd=REPO_ROOT).returncode
 
 def main() -> int:
     subset_path = ensure_subset()
     return run_judgebench(subset_path)
-
 
 if __name__ == "__main__":
     sys.exit(main())

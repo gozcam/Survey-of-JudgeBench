@@ -9,3 +9,4 @@ google-auth
 requests
 jinja2
 transformers
+httpx==0.27.2
