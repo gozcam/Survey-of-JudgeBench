@@ -21,11 +21,12 @@ RUN_JUDGE_SCRIPT = JUDGEBENCH_DIR / "run_judge.py"
 FULL_DATASET = JUDGEBENCH_DIR / "data" / "dataset=judgebench,response_model=gpt-4o-2024-05-13.jsonl"
 SUBSET_PATH = REPO_ROOT / "data" / "dataset=judgebench-pilot10,response_model=gpt-4o-2024-05-13.jsonl"
 SUBSET_SIZE = 10
-SEED = 42
+SEED = 42  # fixed seed so every pilot samples the same 10 pairs
 
 def ensure_subset() -> Path:
     SUBSET_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+    # reuse the existing subset so all pilots compare against the same 10 pairs
     if SUBSET_PATH.exists():
         print(f"Subset already exists at {SUBSET_PATH}, reusing it.")
         return SUBSET_PATH
@@ -63,10 +64,11 @@ def run_judgebench(subset_path: Path) -> int:
         "--judge_name", "arena_hard",
         "--judge_model", "gpt-4o-mini",
         "--pairs", str(subset_path),
-        "--concurrency_limit", "5",
+        "--concurrency_limit", "5",  # 5 concurrent api requests; lower if hitting rate limits
     ]
     print(f"Running: {' '.join(cmd)} (cwd={REPO_ROOT})")
     print(f"Outputs will be written to: {output_dir}")
+    # cwd must be the repo root because run_judge.py resolves output paths relative to it
     return subprocess.run(cmd, cwd=REPO_ROOT).returncode
 
 def main() -> int:

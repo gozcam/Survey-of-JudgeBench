@@ -26,12 +26,13 @@ SUBSET_DATASET = REPO_ROOT / "data" / "dataset=judgebench-pilot10,response_model
 JUDGE_NAME = os.environ.get("JUDGE_NAME", "arena_hard")
 JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "gemini-2.5-flash-lite")
 NUM_PAIRS = 10
-SEED = 42
+SEED = 42  # fixed seed so every pilot samples the same 10 pairs
 CONCURRENCY_LIMIT = os.environ.get("CONCURRENCY_LIMIT", "5")
 
 def build_subset() -> None:
     SUBSET_DATASET.parent.mkdir(parents=True, exist_ok=True)
 
+    # reuse the existing subset so all pilots compare against the same 10 pairs
     if SUBSET_DATASET.exists():
         print(f"[pilot] Subset already exists: {SUBSET_DATASET}")
         return
@@ -68,11 +69,12 @@ def run_judgebench() -> None:
         "--judge_name", JUDGE_NAME,
         "--judge_model", JUDGE_MODEL,
         "--pairs", str(SUBSET_DATASET),
-        "--concurrency_limit", str(CONCURRENCY_LIMIT),
+        "--concurrency_limit", str(CONCURRENCY_LIMIT),  # 5 concurrent api requests; lower if hitting rate limits
     ]
 
     print(f"[pilot] Running: {' '.join(cmd)} (cwd={REPO_ROOT})")
     print(f"[pilot] Outputs will be written to: {output_dir}")
+    # cwd must be the repo root because run_judge.py resolves output paths relative to it
     subprocess.run(cmd, cwd=REPO_ROOT, check=True)
 
 if __name__ == "__main__":

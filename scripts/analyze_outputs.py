@@ -18,6 +18,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 OUTPUTS_DIR = REPO_ROOT / "outputs"
 ANALYSIS_DIR = OUTPUTS_DIR / "analysis"
 
+# livebench sources match exactly; mmlu-pro has subcategories like "mmlu-pro-math"
+# so it needs prefix matching rather than an exact lookup
 CATEGORY_MAP = {
     "livebench-math": "livebench-math",
     "livebench-reasoning": "livebench-reasoning",
@@ -30,12 +32,15 @@ CATEGORIES = ["mmlu-pro", "livebench-reasoning", "livebench-math", "livecodebenc
 def top_level_category(source: str) -> str:
     if source in CATEGORY_MAP:
         return CATEGORY_MAP[source]
+    # mmlu-pro subcategories (e.g. "mmlu-pro-math") all roll up to "mmlu-pro"
     if source.startswith("mmlu-pro"):
         return "mmlu-pro"
     return "other"
 
 
 def flip(decision: str) -> str:
+    # in the second pass, A and B are swapped, so we invert the decision
+    # before comparing it to the original label
     if decision == "A>B":
         return "B>A"
     if decision == "B>A":
@@ -51,14 +56,18 @@ def score_pair(pair: dict) -> str:
 
     if j1 is None:
         return "incorrect"
+    # single-pass judge (e.g. reward model): just check the one decision directly
     if j2 is None:
         d = j1["decision"]
         return "correct" if d == pair["label"] else "incorrect"
 
+    # two-pass scoring: j2 was run with A and B swapped, so un-flip it before comparing
     decision1 = j1["decision"]
     decision2 = flip(j2["decision"])
     label = pair["label"]
 
+    # tally votes: +1 each time a pass agrees with the label, -1 when it disagrees
+    # a tie (counter == 0) means the judge flipped its answer when the order changed
     counter = 0
     for d in [decision1, decision2]:
         if d == label:
@@ -90,6 +99,7 @@ def compute_metrics(pairs: list[dict]) -> dict:
     for pair in pairs:
         cat = top_level_category(pair["source"])
         outcome = score_pair(pair)
+        # bucket into the specific category and always into Overall
         if cat in stats:
             stats[cat][outcome] += 1
         stats["Overall"][outcome] += 1
@@ -97,6 +107,7 @@ def compute_metrics(pairs: list[dict]) -> dict:
     results = {}
     for cat, counts in stats.items():
         total = counts["correct"] + counts["incorrect"] + counts["inconsistent"]
+        # guard against empty categories (small pilots may skip some entirely)
         if total == 0:
             results[cat] = {"accuracy": None, **counts, "total": 0}
         else:
@@ -116,6 +127,8 @@ def extract_failures(pairs: list[dict]) -> list[dict]:
 
         judgments = [j for j in pair["judgments"] if j is not None]
         decisions = [j["decision"] for j in judgments]
+        # truncate reasoning to the first 600 chars — enough to see the judge's rationale
+        # without inflating the failure file with the full response text
         reasoning_snippets = []
         for j in judgments:
             inner = j.get("judgment", {})
@@ -139,6 +152,8 @@ def extract_failures(pairs: list[dict]) -> list[dict]:
 
 
 def model_short_name(path: Path) -> str:
+    # output filenames follow the pattern "dataset=...,judge_model=<name>"
+    # pull out just the model name for use as a display key
     stem = path.stem
     if "judge_model=" in stem:
         return stem.split("judge_model=")[1]
@@ -259,6 +274,8 @@ def _skywork_identify(model_pairs: dict[str, list]) -> tuple[str | None, str | N
     for model, pairs in model_pairs.items():
         if not pairs:
             continue
+        # both Skywork variants share the same model family name, so we
+        # distinguish them by the judge_name field written during the run
         jn = pairs[0].get("judge_name", "")
         if jn == "reward_model" and "Skywork" in model:
             reward_key = model
@@ -270,6 +287,7 @@ def _skywork_identify(model_pairs: dict[str, list]) -> tuple[str | None, str | N
 def _reward_scores(pair: dict) -> tuple[float, float] | None:
     """Extract (score_A, score_B) from a reward-model pair, or None."""
     try:
+        # reward model stores raw scores instead of a text decision
         scores = pair["judgments"][0]["judgment"]["scores"]
         if scores and len(scores) == 2:
             return float(scores[0]), float(scores[1])
@@ -282,6 +300,7 @@ def skywork_pairwise_agreement(reward_pairs: list[dict], critic_pairs: list[dict
     """Compute how often reward and critic agree/disagree and who was right."""
     reward_by_id = {p["pair_id"]: p for p in reward_pairs}
     critic_by_id = {p["pair_id"]: p for p in critic_pairs}
+    # only compare pairs that both models actually judged
     shared_ids = set(reward_by_id) & set(critic_by_id)
 
     counts = {
@@ -323,11 +342,13 @@ def skywork_margin_stats(reward_pairs: list[dict]) -> dict:
         scores = _reward_scores(pair)
         if scores is None:
             continue
+        # larger margin = the reward model was more confident in its choice
         margin = abs(scores[0] - scores[1])
         outcome = score_pair(pair)
         if outcome in by_outcome:
             by_outcome[outcome].append(margin)
         cat = top_level_category(pair["source"])
+        # collapse inconsistent into "incorrect" for the per-category breakdown
         if cat in by_cat:
             bucket = "correct" if outcome == "correct" else "incorrect"
             by_cat[cat][bucket].append(margin)
@@ -421,6 +442,7 @@ def print_skywork_comparison(
 
 
 def _classify_paradigm(model_key: str, pairs: list[dict]) -> str:
+    # judge_name is written by the runner and tells us which evaluation paradigm was used
     if not pairs:
         return "Other"
     jn = pairs[0].get("judge_name", "")
@@ -461,6 +483,7 @@ def _final_verdict(pair: dict) -> str:
         return j1["decision"]
     d1 = j1["decision"]
     d2 = flip(j2["decision"])
+    # if the two passes disagree after un-flipping, call it a tie
     return d1 if d1 == d2 else "tie"
 
 
@@ -485,7 +508,7 @@ def print_prompted_indepth(prompted_keys: list[str], model_metrics: dict, model_
         "  Models: " + " | ".join(labels),
     ]
 
-    # Inconsistency rates by category
+    # --- inconsistency rates by category ---
     lines += [
         "",
         "  --- Inconsistency rates by category ---",
@@ -500,7 +523,8 @@ def print_prompted_indepth(prompted_keys: list[str], model_metrics: dict, model_
             row += f"  {_rate(m['inconsistent'], m['total']):>{col_w}}"
         lines.append(row)
 
-    # Pairwise agreement matrix
+    # --- pairwise agreement matrix ---
+    # diagonal is always 100% (a model always agrees with itself)
     lines += [
         "",
         "  --- Pairwise agreement matrix ---",
@@ -518,7 +542,9 @@ def print_prompted_indepth(prompted_keys: list[str], model_metrics: dict, model_
                 row += f"  {_rate(agree, total):>{col_w}}"
         lines.append(row)
 
-    # Consensus analysis
+    # --- consensus analysis ---
+    # for each pair that all models judged, count how many got it right
+    # then bucket into unanimous/majority/split/wrong to show where models agree
     by_id = {k: {p["pair_id"]: p for p in model_pairs[k]} for k in prompted_keys}
     shared_ids = set.intersection(*(set(d.keys()) for d in by_id.values()))
     n = len(shared_ids)
@@ -554,7 +580,8 @@ def print_prompted_indepth(prompted_keys: list[str], model_metrics: dict, model_
         f"  {'All wrong (unanimous)':<34} {buckets['unanimous_wrong']:>5}  ({_rate(buckets['unanimous_wrong'], n):>6})",
     ]
 
-    # Per-category ranking
+    # --- per-category ranking ---
+    # sort by accuracy descending; models with no data (None) go to the bottom
     lines += [
         "",
         "  --- Per-category ranking (best -> worst accuracy) ---",
@@ -577,11 +604,13 @@ def print_prompted_indepth(prompted_keys: list[str], model_metrics: dict, model_
 
 
 def print_paradigm_comparison(model_metrics: dict, model_pairs: dict) -> str:
+    # group models by evaluation paradigm (prompted / fine-tuned critic / reward)
     groups: dict[str, list[str]] = {}
     for model, pairs in model_pairs.items():
         p = _classify_paradigm(model, pairs)
         groups.setdefault(p, []).append(model)
 
+    # enforce a meaningful display order; any unexpected paradigms go at the end
     paradigm_order = ["Prompted", "Fine-tuned (Critic)", "Reward Model"]
     ordered = {p: groups[p] for p in paradigm_order if p in groups}
     for p in groups:
@@ -601,7 +630,7 @@ def print_paradigm_comparison(model_metrics: dict, model_pairs: dict) -> str:
         names = ", ".join(_display_name(k) for k in keys)
         lines.append(f"    {p:<20}: {names}")
 
-    # average accuracy by paradigm
+    # average accuracy across all models in each paradigm group
     lines += [
         "",
         "  --- Average accuracy by paradigm ---",
@@ -619,7 +648,8 @@ def print_paradigm_comparison(model_metrics: dict, model_pairs: dict) -> str:
             row += f"  {sum(accs)/len(accs):>{col_w-1}.1f}%" if accs else f"  {'n/a':>{col_w}}"
         lines.append(row)
 
-    # average inconsistency by paradigm
+    # reward model is single-pass so it can never produce an inconsistency;
+    # the note in the header makes that explicit so the 0% doesn't look wrong
     lines += [
         "",
         "  --- Average inconsistency rate by paradigm ---",
@@ -638,7 +668,7 @@ def print_paradigm_comparison(model_metrics: dict, model_pairs: dict) -> str:
             row += f"  {sum(rates)/len(rates):>{col_w-1}.1f}%" if rates else f"  {'0.0%':>{col_w}}"
         lines.append(row)
 
-    # best paradigm per category
+    # find which paradigm had the highest average accuracy per category
     lines += [
         "",
         "  --- Best-performing paradigm per category ---",
@@ -694,7 +724,7 @@ def save_comparison_csv(model_metrics: dict[str, dict], path: Path) -> None:
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-    # collect full-run output files (exclude pilot subsets)
+    # skip pilot files — they're too small for a meaningful full-run analysis
     output_files = sorted(
         p for p in OUTPUTS_DIR.glob("dataset=judgebench,*.jsonl")
         if "pilot" not in p.name
@@ -714,6 +744,7 @@ def main() -> int:
     for p in output_files:
         print(f"  {p.name}")
 
+    # load every model's output once and compute metrics + failures up front
     for path in output_files:
         model = model_short_name(path)
         pairs = load_output_file(path)
@@ -723,7 +754,7 @@ def main() -> int:
         model_failures[model] = failures
         model_pairs[model] = pairs
 
-    # build text summary
+    # --- build the text summary ---
     summary_parts = ["JudgeBench Output Analysis", "=" * 60]
 
     for model in model_metrics:
@@ -741,7 +772,7 @@ def main() -> int:
         summary_parts.append(f"\n[[ {model} ]]")
         summary_parts.append(sample_failures(failures, n=2))
 
-    # Skywork-specific comparison section
+    # skywork section only runs when both variants are present
     reward_key, critic_key = _skywork_identify(model_pairs)
     if reward_key and critic_key:
         summary_parts.append(
@@ -763,7 +794,7 @@ def main() -> int:
             f"\n[Skywork comparison skipped — missing output(s): {', '.join(missing)}]"
         )
 
-    # prompted judges in-depth
+    # need at least two prompted models for a meaningful comparison
     prompted_keys = [
         k for k, pairs in model_pairs.items()
         if pairs and pairs[0].get("judge_name") == "arena_hard"
@@ -771,7 +802,6 @@ def main() -> int:
     if len(prompted_keys) >= 2:
         summary_parts.append(print_prompted_indepth(prompted_keys, model_metrics, model_pairs))
 
-    # paradigm-level comparison
     summary_parts.append(print_paradigm_comparison(model_metrics, model_pairs))
 
     summary_text = "\n".join(summary_parts)
@@ -781,12 +811,11 @@ def main() -> int:
     summary_path.write_text(summary_text, encoding="utf-8")
     print(f"\nSaved summary to {summary_path}")
 
-    # save comparison CSV
     csv_path = ANALYSIS_DIR / "comparison.csv"
     save_comparison_csv(model_metrics, csv_path)
     print(f"Saved comparison CSV to {csv_path}")
 
-    # save failures per model
+    # sanitize slashes and colons so the model name is safe as a filename
     for model, failures in model_failures.items():
         safe_model = model.replace("/", "_").replace(":", "_")
         failures_path = ANALYSIS_DIR / f"failures_{safe_model}.jsonl"

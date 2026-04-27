@@ -1,81 +1,55 @@
 # Survey of JudgeBench
 
-This repository contains the standalone scripts and small code changes used to run my survey experiments on **JudgeBench**, focused on comparing different kinds of LLM judges.
+This repository contains the scripts and small modifications used to run survey experiments on **JudgeBench**, comparing different LLM judge paradigms across four categories:
 
-The main goal is to evaluate how well different judge models act as evaluators on JudgeBench, especially across:
 - **Knowledge** (`mmlu-pro`)
 - **Reasoning** (`livebench-reasoning`)
 - **Math** (`livebench-math`)
 - **Coding** (`livecodebench`)
 
-The project is structured so it is **not just a copy of the original JudgeBench repo**. Instead, it uses standalone runner scripts and local modifications that make the experiments easier to reproduce and analyze for the report.
+Three judge paradigms are evaluated:
 
----
-
-## Project focus
-
-This survey studies three judge families:
-
-- **Prompted judges**  
-  General LLMs used with a judging prompt, such as:
-  - GPT-4o-mini
-  - Gemini Flash Lite
-  - other prompted baselines if added later
-
-- **Fine-tuned judges**  
-  Models explicitly trained for judging / critique
-
-- **Reward models**  
-  Models that score both responses and select the higher-scored one
-
-The current repository already supports the prompted-judge pipeline and can be extended with additional models.
+| Paradigm | Models |
+|---|---|
+| Prompted | GPT-4o-mini, GPT-4.1-mini, Gemini 2.5 Flash Lite |
+| Fine-tuned critic | Skywork-Critic-Llama-3.1-8B |
+| Reward model | Skywork-Reward-Llama-3.1-8B |
+| Prompted (local) | Meta-Llama-3.1-8B-Instruct (via vLLM) |
 
 ---
 
 ## Repository structure
 
-A typical layout looks like this:
-
 ```text
 repo/
-├─ README.md
-├─ requirements.txt
-├─ data/
-│  ├─ dataset=judgebench-pilot10,response_model=gpt-4o-2024-05-13.jsonl
-│  └─ ...
-├─ outputs/
-│  ├─ dataset=judgebench,response_model=gpt-4o-2024-05-13,judge_name=arena_hard,judge_model=gpt-4o-mini.jsonl
-│  └─ ...
+├─ data/                          # pilot subsets (10-pair)
+├─ outputs/                       # judged results per model
+│  └─ analysis/                   # summary.txt, comparison.csv, failures_*.jsonl
 ├─ scripts/
 │  ├─ rungpt4omini_pilot.py
 │  ├─ rungpt4omini_full.py
 │  ├─ rungeminiflashlite_pilot.py
-│  └─ rungeminiflashlite_full.py
+│  ├─ rungeminiflashlite_full.py
+│  ├─ rungpt41mini_pilot.py
+│  ├─ rungpt41mini_full.py
+│  ├─ runskyworkcritic_pilot.py
+│  ├─ runskyworkcritic_full.py
+│  ├─ runskyworkreward_pilot.py
+│  ├─ runskyworkreward_full.py
+│  ├─ runllama31_8b_pilot.py
+│  ├─ runllama31_8b_full.py
+│  └─ analyze_outputs.py
+├─ localsetups/
+│  ├─ local_setup_llama31_8b_vllm.md
+│  ├─ local_setup_skywork_critic_vllm.md
+│  └─ local_setup_skywork_reward_cuda.md
 └─ third_party/
    └─ judgebench/
       ├─ run_judge.py
       ├─ utils/
-      │  ├─ file_operations.py
-      │  ├─ judges.py
-      │  ├─ metrics.py
-      │  ├─ models.py
-      │  └─ prompts.py
       └─ data/
          └─ dataset=judgebench,response_model=gpt-4o-2024-05-13.jsonl
 ```
-
----
-
-## What was changed from the upstream JudgeBench setup
-
-This repo includes practical changes for reproducibility:
-
-- standalone pilot and full-run scripts for each model
-- pilot subsets saved under root `data/`
-- judged outputs written to root `outputs/`
-- UTF-8 output writing fix for Windows compatibility
-- metrics guard for empty-category pilot subsets
-- environment-specific setup notes for API-based runs
 
 ---
 
@@ -83,19 +57,19 @@ This repo includes practical changes for reproducibility:
 
 ### 1. Create and activate a virtual environment
 
-### Windows Command Prompt
+**Windows Command Prompt**
 ```cmd
 python -m venv .venv
 .venv\Scripts\activate
 ```
 
-### Windows PowerShell
+**Windows PowerShell**
 ```powershell
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 ```
 
-### macOS / Linux / WSL
+**macOS / Linux / WSL**
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -104,73 +78,55 @@ source .venv/bin/activate
 ### 2. Install dependencies
 
 ```bash
-python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
 If needed for Gemini support:
-
 ```bash
 pip install google-generativeai
 ```
 
-If needed for OpenAI/httpx compatibility, pin:
-
+If you hit an OpenAI/httpx compatibility error:
 ```bash
 pip install httpx==0.27.2
+```
+
+For Skywork Reward (runs via HuggingFace transformers on GPU):
+```bash
+pip install -r third_party/judgebench/requirements-cuda.txt
 ```
 
 ---
 
 ## API keys
 
-Export the required key before running a model.
+Set the required key in your terminal session before running.
 
-### OpenAI (GPT-4o-mini)
-
-#### Windows Command Prompt
-```cmd
-set OPENAI_API_KEY=your_key_here
-```
-
-#### Windows PowerShell
-```powershell
-$env:OPENAI_API_KEY="your_key_here"
-```
-
-#### macOS / Linux / WSL
+**OpenAI models (GPT-4o-mini, GPT-4.1-mini)**
 ```bash
-export OPENAI_API_KEY="your_key_here"
+export OPENAI_API_KEY="your_key_here"      # macOS/Linux/WSL
+set OPENAI_API_KEY=your_key_here           # Windows CMD
+$env:OPENAI_API_KEY="your_key_here"        # PowerShell
 ```
 
-### Gemini Flash Lite
-
-#### Windows Command Prompt
-```cmd
-set GEMINI_API_KEY=your_key_here
-```
-
-#### Windows PowerShell
-```powershell
-$env:GEMINI_API_KEY="your_key_here"
-```
-
-#### macOS / Linux / WSL
+**Gemini Flash Lite**
 ```bash
 export GEMINI_API_KEY="your_key_here"
 ```
+
+Local models (Skywork Critic, Skywork Reward, Llama 3.1 8B) do not require an API key.
 
 ---
 
 ## Required dataset
 
-The full JudgeBench dataset used in these runs is expected at:
+The full dataset must be present at:
 
 ```text
 third_party/judgebench/data/dataset=judgebench,response_model=gpt-4o-2024-05-13.jsonl
 ```
 
-Pilot scripts generate a smaller 10-pair subset and save it under:
+Pilot scripts create a 10-pair subset at:
 
 ```text
 data/dataset=judgebench-pilot10,response_model=gpt-4o-2024-05-13.jsonl
@@ -180,181 +136,68 @@ data/dataset=judgebench-pilot10,response_model=gpt-4o-2024-05-13.jsonl
 
 ## Running experiments
 
-## GPT-4o-mini pilot
+Each model has a pilot script (10-pair subset) and a full-run script. Run them from the repo root:
 
 ```bash
 python scripts/rungpt4omini_pilot.py
-```
-
-This:
-1. creates or reuses a 10-pair pilot subset
-2. runs JudgeBench using GPT-4o-mini as the judge
-3. writes judged results into root `outputs/`
-
-## GPT-4o-mini full run
-
-```bash
 python scripts/rungpt4omini_full.py
-```
 
-This runs the full JudgeBench GPT-4o response-pair dataset.
-
-## Gemini Flash Lite pilot
-
-```bash
 python scripts/rungeminiflashlite_pilot.py
-```
-
-## Gemini Flash Lite full run
-
-```bash
 python scripts/rungeminiflashlite_full.py
+
+python scripts/rungpt41mini_pilot.py
+python scripts/rungpt41mini_full.py
+
+python scripts/runskyworkcritic_pilot.py   # requires vLLM server on localhost:8000
+python scripts/runskyworkcritic_full.py
+
+python scripts/runskyworkreward_pilot.py   # requires CUDA GPU + HuggingFace deps
+python scripts/runskyworkreward_full.py
+
+python scripts/runllama31_8b_pilot.py      # requires vLLM server on localhost:8000
+python scripts/runllama31_8b_full.py
 ```
 
-If your scripts live in the repo root instead of `scripts/`, use:
+For detailed setup instructions for the three local models, see [`localsetups/`](localsetups/).
+
+> **Note:** these scripts are wrappers around `third_party/judgebench/run_judge.py`. The same runs can be performed directly via the terminal command documented in the [JudgeBench README](third_party/judgebench/README.md). The wrapper scripts are provided here for simplicity and to document the exact flags and paths used for each model.
+
+---
+
+## Analyzing results
+
+After full runs are complete, generate the analysis:
 
 ```bash
-python rungpt4omini_pilot.py
-python rungpt4omini_full.py
-python rungeminiflashlite_pilot.py
-python rungeminiflashlite_full.py
+python scripts/analyze_outputs.py
 ```
+
+This reads all full-run JSONL files from `outputs/` and writes to `outputs/analysis/`:
+
+- `summary.txt` — per-model accuracy tables, failure breakdown, cross-model and paradigm comparisons
+- `comparison.csv` — spreadsheet-friendly accuracy table
+- `failures_<model>.jsonl` — failure records per model for qualitative inspection
 
 ---
 
 ## Output files
 
-Judged results are written to the root `outputs/` folder.
-
-Examples:
+Judged results are written to `outputs/` with filenames like:
 
 ```text
-outputs/dataset=judgebench-pilot10,response_model=gpt-4o-2024-05-13,judge_name=arena_hard,judge_model=gpt-4o-mini.jsonl
-outputs/dataset=judgebench,response_model=gpt-4o-2024-05-13,judge_name=arena_hard,judge_model=gemini-2.5-flash-lite.jsonl
+dataset=judgebench,response_model=gpt-4o-2024-05-13,judge_name=arena_hard,judge_model=gpt-4o-mini.jsonl
 ```
 
-These JSONL files contain the original pair fields plus:
-- `judge_name`
-- `judgments`
-
-They are the source of truth for later analysis.
+Each JSONL row contains the original pair fields plus `judgments`. If an output file already exists, `run_judge.py` resumes from where it left off. Delete the file first if you want a clean rerun.
 
 ---
 
-## Seeing the category breakdown
+## Troubleshooting
 
-At the end of a run, `run_judge.py` prints:
-- `mmlu-pro`
-- `livebench-reasoning`
-- `livebench-math`
-- `livecodebench`
-- `Overall`
+**`OPENAI_API_KEY is not set`** — export the key in the same terminal session before running.
 
-These correspond to:
-- Knowledge
-- Reasoning
-- Math
-- Coding
-- Overall accuracy
+**`AsyncClient.__init__() got an unexpected keyword argument 'proxies'`** — pin `httpx==0.27.2`.
 
----
+**Unicode / `cp1252` write errors on Windows** — output files must be opened with `encoding="utf-8"`.
 
-## Inspecting failures
-
-To inspect specific failures after a run, read the saved JSONL in `outputs/` and compare:
-- gold label: `label`
-- model decision(s): `judgments`
-
-Recommended approach:
-- write a small inspection script that filters incorrect pairs
-- group failures by `source`
-- save representative mistakes for the report discussion section
-
-Useful fields per row:
-- `pair_id`
-- `source`
-- `question`
-- `response_A`
-- `response_B`
-- `label`
-- `judgments`
-
----
-
-## Reproducibility notes
-
-### Important local fixes
-These were important during setup and may be needed again:
-
-- **Windows UTF-8 fix:** output files should be written with `encoding="utf-8"`
-- **OpenAI/httpx compatibility:** `httpx==0.27.2` may be required
-- **Pilot subset location:** saved under root `data/`
-- **Run outputs:** written to root `outputs/`
-
-### Rerun behavior
-If an output file already exists, `run_judge.py` skips already judged `pair_id`s and resumes from the remaining ones.
-
-This is useful for interrupted runs, but if you want a completely clean rerun, delete the old output file first.
-
----
-
-## Resources used
-
-This project mainly uses:
-- Python virtual environment
-- OpenAI API for GPT-4o-mini experiments
-- Gemini API for Gemini Flash Lite experiments
-
-These runs are API-based, so local GPU usage is not required for the current prompted-judge experiments.
-
----
-
-## Report mapping
-
-This codebase supports the required report sections as follows:
-
-- **Introduction:** JudgeBench and LLM-as-a-judge framing
-- **Experimental Setup:** scripts, datasets, judge models, environment variables, API setup
-- **Results:** output JSONL files and category metrics
-- **Discussion:** saved failure cases and cross-model comparisons
-- **Resources:** API use and runtime notes
-- **Code:** this repository and these reproducible run commands
-
----
-
-## Common troubleshooting
-
-### `OPENAI_API_KEY is not set`
-Export the OpenAI key in the same terminal session before running the GPT-4o-mini script.
-
-### `GEMINI_API_KEY is not set`
-Export the Gemini key in the same terminal session before running the Gemini script.
-
-### `AsyncClient.__init__() got an unexpected keyword argument 'proxies'`
-Pin:
-
-```bash
-pip install httpx==0.27.2
-```
-
-### Unicode / `cp1252` write errors on Windows
-Make sure output files are opened with:
-
-```python
-open(output_file, "a", encoding="utf-8")
-```
-
-### Pilot metrics crash due to empty category
-If a very small pilot subset misses a category entirely, the metrics function should guard against divide-by-zero.
-
----
-
-## Future extensions
-
-This repository is meant to grow as more judge models are added. The plan is to keep one reference log per model run, then combine those logs into the final survey report.
-
-Potential additions:
-- more prompted judges
-- fine-tuned critics
-- reward models
-- automated analysis scripts for failure extraction and table generation
+**Pilot metrics crash on empty category** — a 10-pair subset may miss a category entirely; the metrics code guards against this, but very small subsets are expected to have sparse results.

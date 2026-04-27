@@ -3,7 +3,7 @@
 The reward model runs locally via HuggingFace transformers and requires a CUDA-capable
 GPU. No API key is needed, but the extra dependencies must be installed first:
 
-    pip install -r third_party/judgebench/requirements-cuda.txt
+    pip install -r requirements-cuda.txt
 
 Outputs will be written to REPO_ROOT / "outputs".
 """
@@ -34,7 +34,7 @@ def run_judgebench() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("NOTE: This reward model runs locally and requires a CUDA-capable GPU.")
-    print("      Ensure you have installed: pip install -r third_party/judgebench/requirements-cuda.txt")
+    print("      Ensure you have installed: pip install -r requirements-cuda.txt")
     print(f"      Model will be downloaded from HuggingFace on first run: {JUDGE_MODEL}")
     print()
 
@@ -43,12 +43,13 @@ def run_judgebench() -> int:
         str(RUN_JUDGE_SCRIPT),
         "--judge_name", JUDGE_NAME,
         "--judge_model", JUDGE_MODEL,
-        "--single_game",
+        "--single_game",  # reward model scores each response independently — order doesn't matter
         "--pairs", str(FULL_DATASET),
     ]
 
     print(f"Running: {' '.join(cmd)} (cwd={REPO_ROOT})")
     print(f"Outputs will be written to: {output_dir}")
+    # cwd must be the repo root because run_judge.py resolves output paths relative to it
     return subprocess.run(cmd, cwd=REPO_ROOT).returncode
 
 

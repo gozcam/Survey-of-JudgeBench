@@ -1,14 +1,7 @@
 """Run JudgeBench on the full GPT-4o response-pair dataset using Meta-Llama-3.1-8B-Instruct.
 
 The model is served locally via a vLLM OpenAI-compatible server on localhost:8000.
-No API key is required; ensure the vLLM server is running before executing this script:
-
-    docker run --runtime nvidia --gpus all \\
-        -v ~/.cache/huggingface:/root/.cache/huggingface \\
-        --env "HF_TOKEN=<your-huggingface-token>" \\
-        -p 8000:8000 --ipc=host \\
-        vllm/vllm-openai:latest \\
-        --model meta-llama/Meta-Llama-3.1-8B-Instruct
+No API key is required; ensure the vLLM server is running before executing this script
 
 Outputs will be written to REPO_ROOT / "outputs".
 """
@@ -47,11 +40,12 @@ def run_judgebench() -> int:
         "--judge_name", JUDGE_NAME,
         "--judge_model", JUDGE_MODEL,
         "--pairs", str(FULL_DATASET),
-        "--concurrency_limit", "1",
+        "--concurrency_limit", "1",  # single gpu can't handle parallel inference
     ]
 
     print(f"Running: {' '.join(cmd)} (cwd={REPO_ROOT})")
     print(f"Outputs will be written to: {output_dir}")
+    # cwd must be the repo root because run_judge.py resolves output paths relative to it
     return subprocess.run(cmd, cwd=REPO_ROOT).returncode
 
 

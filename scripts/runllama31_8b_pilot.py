@@ -3,13 +3,6 @@
 The model is served locally via a vLLM OpenAI-compatible server on localhost:8000.
 No API key is required; ensure the vLLM server is running before executing this script:
 
-    docker run --runtime nvidia --gpus all \\
-        -v ~/.cache/huggingface:/root/.cache/huggingface \\
-        --env "HF_TOKEN=<your-huggingface-token>" \\
-        -p 8000:8000 --ipc=host \\
-        vllm/vllm-openai:latest \\
-        --model meta-llama/Meta-Llama-3.1-8B-Instruct
-
 The script:
   1. Ensures a 10-pair subset of the GPT-4o JudgeBench dataset exists (creating it if not).
   2. Invokes the JudgeBench `run_judge.py` command against that subset using
@@ -30,7 +23,7 @@ RUN_JUDGE_SCRIPT = JUDGEBENCH_DIR / "run_judge.py"
 FULL_DATASET = JUDGEBENCH_DIR / "data" / "dataset=judgebench,response_model=gpt-4o-2024-05-13.jsonl"
 SUBSET_PATH = REPO_ROOT / "data" / "dataset=judgebench-pilot10,response_model=gpt-4o-2024-05-13.jsonl"
 SUBSET_SIZE = 10
-SEED = 42
+SEED = 42  # fixed seed so every pilot samples the same 10 pairs
 
 JUDGE_NAME = "arena_hard"
 JUDGE_MODEL = "meta-llama/Meta-Llama-3.1-8B-Instruct"
@@ -39,6 +32,7 @@ JUDGE_MODEL = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 def ensure_subset() -> Path:
     SUBSET_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+    # reuse the existing subset so all pilots compare against the same 10 pairs
     if SUBSET_PATH.exists():
         print(f"Subset already exists at {SUBSET_PATH}, reusing it.")
         return SUBSET_PATH
@@ -76,10 +70,11 @@ def run_judgebench(subset_path: Path) -> int:
         "--judge_name", JUDGE_NAME,
         "--judge_model", JUDGE_MODEL,
         "--pairs", str(subset_path),
-        "--concurrency_limit", "1",
+        "--concurrency_limit", "1",  # single gpu can't handle parallel inference
     ]
     print(f"Running: {' '.join(cmd)} (cwd={REPO_ROOT})")
     print(f"Outputs will be written to: {output_dir}")
+    # cwd must be the repo root because run_judge.py resolves output paths relative to it
     return subprocess.run(cmd, cwd=REPO_ROOT).returncode
 
 

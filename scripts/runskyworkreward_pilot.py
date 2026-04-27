@@ -3,7 +3,7 @@
 The reward model runs locally via HuggingFace transformers and requires a CUDA-capable
 GPU. No API key is needed, but the extra dependencies must be installed first:
 
-    pip install -r third_party/judgebench/requirements-cuda.txt
+    pip install -r requirements-cuda.txt
 
 The script:
   1. Ensures a 10-pair subset of the GPT-4o JudgeBench dataset exists (creating it if not).
@@ -26,7 +26,7 @@ RUN_JUDGE_SCRIPT = JUDGEBENCH_DIR / "run_judge.py"
 FULL_DATASET = JUDGEBENCH_DIR / "data" / "dataset=judgebench,response_model=gpt-4o-2024-05-13.jsonl"
 SUBSET_PATH = REPO_ROOT / "data" / "dataset=judgebench-pilot10,response_model=gpt-4o-2024-05-13.jsonl"
 SUBSET_SIZE = 10
-SEED = 42
+SEED = 42  # fixed seed so every pilot samples the same 10 pairs
 
 JUDGE_NAME = "reward_model"
 JUDGE_MODEL = "Skywork/Skywork-Reward-Llama-3.1-8B"
@@ -35,6 +35,7 @@ JUDGE_MODEL = "Skywork/Skywork-Reward-Llama-3.1-8B"
 def ensure_subset() -> Path:
     SUBSET_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+    # reuse the existing subset so all pilots compare against the same 10 pairs
     if SUBSET_PATH.exists():
         print(f"Subset already exists at {SUBSET_PATH}, reusing it.")
         return SUBSET_PATH
@@ -64,7 +65,7 @@ def run_judgebench(subset_path: Path) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("NOTE: This reward model runs locally and requires a CUDA-capable GPU.")
-    print("      Ensure you have installed: pip install -r third_party/judgebench/requirements-cuda.txt")
+    print("      Ensure you have installed: pip install -r requirements-cuda.txt")
     print(f"      Model will be downloaded from HuggingFace on first run: {JUDGE_MODEL}")
     print()
 
@@ -73,11 +74,12 @@ def run_judgebench(subset_path: Path) -> int:
         str(RUN_JUDGE_SCRIPT),
         "--judge_name", JUDGE_NAME,
         "--judge_model", JUDGE_MODEL,
-        "--single_game",
+        "--single_game",  # reward model scores each response independently — order doesn't matter
         "--pairs", str(subset_path),
     ]
     print(f"Running: {' '.join(cmd)} (cwd={REPO_ROOT})")
     print(f"Outputs will be written to: {output_dir}")
+    # cwd must be the repo root because run_judge.py resolves output paths relative to it
     return subprocess.run(cmd, cwd=REPO_ROOT).returncode
 
 

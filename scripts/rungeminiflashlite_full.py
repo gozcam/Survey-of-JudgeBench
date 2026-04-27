@@ -35,11 +35,12 @@ def run_judgebench() -> int:
         "--judge_name", "arena_hard",
         "--judge_model", "gemini-2.5-flash-lite",
         "--pairs", str(FULL_DATASET),
-        "--concurrency_limit", "5",
+        "--concurrency_limit", "5",  # 5 concurrent api requests; lower if hitting rate limits
     ]
 
     print(f"Running: {' '.join(cmd)} (cwd={REPO_ROOT})")
     print(f"Outputs will be written to: {output_dir}")
+    # cwd must be the repo root because run_judge.py resolves output paths relative to it
     return subprocess.run(cmd, cwd=REPO_ROOT).returncode
 
 def main() -> int:
