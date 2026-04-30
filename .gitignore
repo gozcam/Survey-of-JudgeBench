@@ -9,28 +9,25 @@ __pycache__/
 venv/
 env/
 
-# Jupyter
-.ipynb_checkpoints/
-
 # OS / editor files
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
 
-# Build / packaging
+# build / packaging
 build/
 dist/
 *.egg-info/
 
-# Logs
+# logs
 *.log
 
-# Local environment files
+# local environment files
 .env
 .env.*
 
-# Model weights / checkpoints
+# model weights / checkpoints
 *.pt
 *.pth
 *.bin
@@ -38,16 +35,17 @@ dist/
 *.safetensors
 
 
-# Cached Hugging Face / model artifacts
+# cached Hugging Face / model artifacts
 cache/
 .huggingface/
 hf_cache/
 
-# Temporary files
+# temporary files
 tmp/
 temp/
 
-# Generated reports / presentation exports
-*.pdf
+# reports / presentation exports
 *.pptx
 CLAUDE.md
+finalreport.tex
+custom.bib

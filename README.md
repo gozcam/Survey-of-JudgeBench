@@ -25,6 +25,7 @@ repo/
 ├─ data/                          # pilot subsets (10-pair)
 ├─ outputs/                       # judged results per model
 │  └─ analysis/                   # summary.txt, comparison.csv, failures_*.jsonl
+├─ figures/                       # generated figures (PDF + PNG, one per figure)
 ├─ scripts/
 │  ├─ rungpt4omini_pilot.py
 │  ├─ rungpt4omini_full.py
@@ -38,7 +39,8 @@ repo/
 │  ├─ runskyworkreward_full.py
 │  ├─ runllama31_8b_pilot.py
 │  ├─ runllama31_8b_full.py
-│  └─ analyze_outputs.py
+│  ├─ analyze_outputs.py
+│  └─ figure.py
 ├─ localsetups/
 │  ├─ local_setup_llama31_8b_vllm.md
 │  ├─ local_setup_skywork_critic_vllm.md
@@ -177,6 +179,30 @@ This reads all full-run JSONL files from `outputs/` and writes to `outputs/analy
 - `summary.txt` — per-model accuracy tables, failure breakdown, cross-model and paradigm comparisons
 - `comparison.csv` — spreadsheet-friendly accuracy table
 - `failures_<model>.jsonl` — failure records per model for qualitative inspection
+
+---
+
+## Generating figures
+
+After full runs and analysis are complete, generate all report figures:
+
+```bash
+python scripts/figure.py
+```
+
+This reads full-run JSONL files from `outputs/` and writes one PDF and one PNG per figure to `figures/` at the repo root (created automatically if it doesn't exist).
+
+| File | Description |
+|---|---|
+| `figure1_failure_modes` | Stacked bar: correct / incorrect / inconsistent per model |
+| `figure2_category_accuracy` | Grouped bar: accuracy by category and model |
+| `figure3_inconsistency_heatmap` | Heatmap: order-swap inconsistency rate by model and category |
+| `figure4_agreement_matrix` | Heatmap: pairwise verdict agreement between prompted judges |
+| `figure5_consensus` | Horizontal stacked bar: consensus distribution across prompted models |
+| `figure6_score_margin` | Grouped bar: Skywork-Reward score margin for correct vs. incorrect pairs |
+| `figure7_incorrect_heatmap` | Heatmap: incorrect judgment rate by model and category |
+
+PDFs are suitable for LaTeX inclusion; PNGs are for preview and quick inspection.
 
 ---
 
